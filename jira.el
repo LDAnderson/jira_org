@@ -1,18 +1,13 @@
+(defun jira-create-buffer ()
+  (when (get-buffer "*jira*") (kill-buffer "*jira*"))
+  (get-buffer-create "*jira*")
+)
 
-;; TODO
-(defun jira-mode ()
-  nil)
-
-;; DONE
-
-(defvar jira-email nil
-  "Email address to use for JIRA authentication")
-(defvar jira-token nil
-  "API token for use in JIRA authentication")
+;; REFACTOR
 
 (defun get-kanban (id)
   "Gets all kanban entries for the project and inserts them into a new buffer"
-  (let* ((b (get-buffer-create "*jira*"))
+  (let* ((b (jira-create-buffer))
          (url (format "https://la-dev.atlassian.net/rest/agile/1.0/board/%s/issue" id))
          (jira (gethash "issues" (get-jira url))))
     (switch-to-buffer b)
@@ -22,16 +17,6 @@
     (mapc 'parse-issue jira)
     (read-only-mode t)
     ))
-
-(defun auth-and-get-buffer (url)
-  (let* ((headers url-request-extra-headers)
-         (auth_str (format "%s:%s" jira-email jira-token))
-         (encoded_auth_str (base64-encode-string auth_str t)))
-         (setq url-request-extra-headers `(("Authorization" . ,(format "Basic %s" encoded_auth_str)) ("Content-Type" . "application/json")))
-         (let ((r (url-retrieve-synchronously url)))
-           (setq url-request-extra-headers headers)
-           r)))
-
 (defun get-issue-field (f j)
   (gethash f (gethash "fields" j)))
 
@@ -47,21 +32,6 @@
   (write-line 3 (get-issue-field "created" j))
   (write-line 3 (get-issue-field "description" j))
   )
-
-(defun get-jira (url)
-  (json-parse-string (buffer-to-string-clear-header (auth-and-get-buffer url))))
-
-(defun buffer-to-string (b)
-  (save-excursion
-    (set-buffer b)
-    (buffer-string)))
-
-(defun buffer-to-string-clear-header (b)
-  (save-excursion
-    (set-buffer b)
-    (re-search-forward "^")
-    (buffer-substring (point) (point-max))))
-
 (defun get-issue-props (rq prop)
   (seq-map (lambda (x) (gethash prop (gethash "fields" x))) (gethash "issues" rq)))
 
@@ -83,7 +53,6 @@
   (upcase (replace-all-regex " " "" s)))
 
 (defun map-workflow-statuses-to-org-notes ()
-
   (let ((r (delete "Done" (delete "Backlog" (get-workflow-statuses)))))
     (concat "#+TODO: "
           (mapconcat
@@ -96,11 +65,5 @@
            (json-parse-string
             (buffer-to-string-clear-header
                       (auth-and-get-buffer "https://la-dev.atlassian.net/rest/api/3/status")))))
-
-(defun replace-all-regex (rexp replaces str)
-  (let ((r str))
-    (while (string-match rexp r)
-      (setq r (replace-match replaces nil nil r)))
-    r))
 
 
